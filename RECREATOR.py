@@ -1,4 +1,5 @@
 import flet as ft
+import flet.canvas as cv
 from time import time
 from random import randint
 from tinytag import TinyTag
@@ -8,8 +9,6 @@ from json import dump,load
 from module.manager import scan_files,scan_all,scan_detail,convert,unconvert
 import _cffi_backend
 from just_playback import Playback
-
-
 
 #封面提取
 def album_get(path):
@@ -28,13 +27,13 @@ if set_path.exists():
         setting=load(log)
 
         
-text_group_list=[["播放界面","歌曲列表","艺术家","专辑","设置","采样率&比特率","暂无歌词","A","B","删除",
+text_group_list=[["播放界面","歌曲列表","艺术家","专辑","设置","采样率&比特率","暂无歌词","动态歌词","B","删除",
                   "歌曲","搜索","简体中文","语言/language","按文件夹排序","按时间升序","按时间降序","按歌曲名升序","按歌曲名降序",
                   "播放此列表","歌词界面是否打开高斯模糊","无色歌词界面","歌词界面更加通透",
                   "载入音乐文件夹","重新扫描文件","歌词文字大小调节","恢复默认字体","重启后生效","设置歌词字体","设置全局字体",
                   "深色模式","配色方案","限制列表长度","极速模式","版本号:1.01","祈祷中!出现错误(QAQ)","液态按钮",
                   "欢迎使用Wind player! 请先完成以下设置","即刻体验","音量调节","40"],
-                 ["playing","playlist","artsit","album","setting","Sampling rate&bit rate","not have lyrics","A",
+                 ["playing","playlist","artsit","album","setting","Sampling rate&bit rate","not have lyrics","dynamic lyrics",
                   "B","delete","song","search","English","language/语言","order with folder","order with time",
                   "descending order with time","order with name","descending order with name",
                   "play this list","koss blur mode","pure lyrics interface","more transparent interface",
@@ -128,6 +127,7 @@ async def main(wind: ft.Page):
 #初始化
     def renew():        
         global music_number
+        canva.shapes=[]
         audio.load_file(data_list[music_number])
         audio.play()
         if not player.selected:
@@ -135,6 +135,8 @@ async def main(wind: ft.Page):
         title_update(music_number)
         photo.content=ft.Image(src=album_get(data_list[music_number])
                                      ,cache_width=1000,cache_height=1000,width=h*0.5,height=h*0.5,border_radius=22)
+        dynamic_photo.src=album_get(data_list[music_number])
+        dynamic_photo.update()
         if setting[0]:
             lyrics_update_dark(music_number)
         else:
@@ -222,7 +224,9 @@ async def main(wind: ft.Page):
         ft.NavigationRailDestination(icon=ft.Icons.REORDER,label=text_group[1]),
         ft.NavigationRailDestination(icon=ft.Icons.PERSON, label=text_group[2]),
         ft.NavigationRailDestination(icon=ft.Icons.ALBUM, label=text_group[3]),
-        ft.NavigationRailDestination(icon=ft.Icons.SETTINGS, label=text_group[4])],
+        ft.NavigationRailDestination(icon=ft.Icons.AUTO_AWESOME, label=text_group[7]),
+        ft.NavigationRailDestination(icon=ft.Icons.SETTINGS, label=text_group[4]),
+        ],                     
     on_change=scroll)
     
 #播放页面
@@ -286,12 +290,13 @@ async def main(wind: ft.Page):
                 if full:
                     if timer.value+int(time()*1000)-last<timer.max-100:
                         timer.value=timer.value+int(time()*1000)-last
+                        glob_time=timer.value
                         last=int(time()*1000)
                         timer.update()
                         wastetime.update()
                 else:
                     glob_time=glob_time+int(time()*1000)-last
-                    last=int(time()*1000)                  
+                    last=int(time()*1000)           
             else:
                 modeking()
             if full:
@@ -305,13 +310,38 @@ async def main(wind: ft.Page):
                                 lyrics_display.controls[lyrics_number].selected=True
                                 await lyrics_display.scroll_to(
                                     offset=max(lyrics_number*(setting[2]*2.5)-0.5*((h*0.7)),0),duration=300)
-                                lyrics_display.update()
+                                lyrics_display.update()                   
+                elif navy.selected_index==4:
+                    if lyrics_number<len(lyrics_list)-1:
+                        if unconvert(lyrics_list[lyrics_number+1][1:9])<glob_time:
+                            lyrics_display.controls[lyrics_number].selected=False
+                            lyrics_number=min(lyrics_number+1,len(lyrics_display.controls)-1)
+                            dynamic_update(lyrics_number)
+                                              
             else:
                 if lyrics_number<len(lyrics_list)-1:
                     if unconvert(lyrics_list[lyrics_number+1][1:9])<glob_time:
                         lyrics_number=min(lyrics_number+1,len(lyrics_display.controls)-1)
                         mini_lyrics.value=lyrics_list[lyrics_number].split("]")[1]
                         mini_lyrics.update()
+
+    def dynamic_update(num):
+        canva.shapes.append(cv.Text(value=lyrics_list[num][10:],x=randint(0,int(wind.window.width*0.4)),
+                                    y=num%10*(wind.window.height-90)//10,
+                                    style=ft.TextStyle(color=color_group[randint(0,3)],
+                                                       shadow=ft.BoxShadow(spread_radius=1,blur_radius=5,color=ft.Colors.BLACK,
+                                offset=ft.Offset(0, 0),),size=randint(20,int(wind.window.height//12)))))
+        if len(canva.shapes)>=10:
+            canva.shapes.pop(0)
+        canva.update()
+        canva_shape.shapes.append(cv.Circle(x=randint(0,int(wind.window.width-120)),
+                                                        y=randint(0,int(wind.window.height-90)), radius=randint(0,400),
+                                                        paint=ft.Paint(color=color_group[randint(0,3)]
+                                                                       ,stroke_width=randint(0,20), style=ft.PaintingStyle.STROKE)))
+        if len(canva_shape.shapes)>=5:
+            canva_shape.shapes.pop(0)
+        canva_shape.update()
+      
     #进度条
     async def time_use(e):
         global lyrics_number,lyrics_list,h
@@ -1153,7 +1183,7 @@ async def main(wind: ft.Page):
 #快捷键
     async def on_key(e):
         global music_number
-        if navy.selected_index==0:
+        if navy.selected_index==0 or navy.selected_index==4:
             if e.key==" ":
                 await play(e)
             elif e.key=="Page Down":
@@ -1225,26 +1255,33 @@ async def main(wind: ft.Page):
 
     small_line=ft.Container(content=ft.Row([upper,player,downer,title_small,small_back,qu],
                                            alignment=ft.MainAxisAlignment.END,height=40,width=w-30),)
+#动态歌词
+    canva=cv.Canvas(width=w-120,height=h-90,shapes=[])
+    canva_shape=cv.Canvas(width=w-120,height=h-90,shapes=[])
+    canbir=ft.Container(content=canva_shape,width=w-120,height=h-90,border_radius=22,
+                        blend_mode=ft.BlendMode.MODULATE,blur=ft.Blur(100,100, ft.BlurTileMode.REPEATED))
+    dynamic_photo=ft.Image(filter_quality=ft.FilterQuality.LOW,src="",height=wind.window.height-90)
+    
     
 #封装
     page1=ft.ListView(controls=[goss])
     page2=ft.ListView(controls=[list_panel])
     page3=ft.PageView([artist_panel,artist_page],selected_index=0,horizontal=False)
     page4=ft.PageView([album_panel,album_page],selected_index=0,horizontal=False)
-    page5=ft.ListView(controls=[setting_panel])
+    page5=ft.ListView(ft.Stack([ft.Row([dynamic_photo],alignment=ft.MainAxisAlignment.CENTER),canbir,canva]))
+    page6=ft.ListView(controls=[setting_panel])
+    
     
     
 
-    basis=ft.PageView([page1,page2,page3,page4,page5,initial_panel],
+    basis=ft.PageView([page1,page2,page3,page4,page5,page6,initial_panel],
                       width=wind.window.width-80,horizontal=True,selected_index=0)
     
     basic=ft.Column([area,ft.Row(controls=[ft.Column([ft.Container(content=navy,border_radius=20)],
                                         alignment=ft.MainAxisAlignment.START),
                               basis],width=wind.window.width,height=wind.window.height)])
     wind.add(basic)
-    
-    
-    
+
     def must(e):
         with open("set.json","w",encoding="utf-8") as file:
             dump(setting,file)
@@ -1287,7 +1324,8 @@ async def main(wind: ft.Page):
             navy.destinations[1].label=text_group[1]
             navy.destinations[2].label=text_group[2]
             navy.destinations[3].label=text_group[3]
-            navy.destinations[4].label=text_group[4]
+            navy.destinations[4].label=text_group[7]
+            navy.destinations[5].label=text_group[4]
         else:
             welcomer.title.value=text_group[37]
             new_scanner.title.value=text_group[23]
@@ -1381,6 +1419,13 @@ async def main(wind: ft.Page):
         setting_panel.controls[0].height=h-90
         initial_panel.controls[0].height=h-90
         initial_panel.controls[0].width=w-120
+        canva.width=w-120
+        canva.height=h-90
+        canbir.content.width=w-120
+        canbir.content.height=h-90
+        canbir.width=w-120
+        canbir.height=h-90
+        dynamic_photo.height=h-90
         wind.update()
     wind.on_resize=resize
 
@@ -1399,7 +1444,7 @@ async def main(wind: ft.Page):
     else:
         navy.destinations=[ft.NavigationRailDestination(icon=ft.Icons.CELEBRATION, label="")]
         navy.on_change=None
-        await basis.jump_to_page(6)
+        await basis.jump_to_page(7)
         navy.selected_index=0
         navy.update()
         
